@@ -23,6 +23,10 @@ Aplicación web desarrollada con **React** y **Firebase**. Su propósito es perm
 
 ---
 
+## Explicacion de cada clase:
+
+
+
 ## 🗂️ Estructura del proyecto
 
 inventario-clientes-pagos/
