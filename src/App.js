@@ -1,4 +1,4 @@
-import Clientes from './components/Clientes';
+import Clientes from './components/Ventas';
 
 function App() {
   return (
