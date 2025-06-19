@@ -1,5 +1,6 @@
+// src/components/Clientes.jsx
 import { useState } from 'react';
-import { db } from '../firebaseConfig';
+import { db } from '../services/firebaseConfig';
 import { collection, addDoc } from 'firebase/firestore';
 
 function Clientes() {
@@ -13,19 +14,19 @@ function Clientes() {
       await addDoc(collection(db, 'clientes'), {
         nombre,
         correo,
-        fechaRegistro: new Date()
+        fecha: new Date()
       });
       setMensaje('✅ Cliente agregado correctamente');
       setNombre('');
       setCorreo('');
     } catch (error) {
       console.error(error);
-      setMensaje('❌ Error al agregar el cliente');
+      setMensaje('❌ Error al guardar el cliente');
     }
   };
 
   return (
-    <div style={{ padding: 20 }}>
+    <div>
       <h2>Registrar Cliente</h2>
       <form onSubmit={agregarCliente}>
         <input
@@ -35,7 +36,6 @@ function Clientes() {
           onChange={(e) => setNombre(e.target.value)}
           required
         />
-        <br />
         <input
           type="email"
           placeholder="Correo"
@@ -43,8 +43,7 @@ function Clientes() {
           onChange={(e) => setCorreo(e.target.value)}
           required
         />
-        <br />
-        <button type="submit">Agregar Cliente</button>
+        <button type="submit">Guardar</button>
       </form>
       {mensaje && <p>{mensaje}</p>}
     </div>
