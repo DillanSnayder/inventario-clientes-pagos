@@ -1,0 +1,4 @@
+npm install
+npm install papaparse file-saver
+npm install react-router-dom
+npm install -D @tailwindcss/postcss
