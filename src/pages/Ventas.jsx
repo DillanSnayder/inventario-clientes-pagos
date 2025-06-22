@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "../services/firebaseConfig";
 import {
   collection,
@@ -11,6 +11,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { formatCurrency } from "../utils/formatCurrency";
+import ModalFactura from "../components/ModalFactura";
 
 // --- MODAL PARA AGREGAR PRODUCTOS ---
 function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
@@ -309,6 +310,11 @@ export default function Ventas() {
   const [fechaFiltro, setFechaFiltro] = useState("");
   const [showClienteSug, setShowClienteSug] = useState(false);
 
+  // --- Para Factura ---
+  const [mostrarModalFactura, setMostrarModalFactura] = useState(false);
+  const [factura, setFactura] = useState(null);
+  const facturaRef = useRef();
+
   useEffect(() => {
     const obtenerVentas = async () => {
       const q = query(collection(db, "ventas"), orderBy("fecha", "desc"));
@@ -341,11 +347,31 @@ export default function Ventas() {
   const cantidadVentasHoy = ventasHoy.length;
   const totalVentasHoy = ventasHoy.reduce((a, v) => a + Number(v.total), 0);
 
-  // Guardar venta y actualizar stock
+  // --- FUNCION GUARDAR FACTURA ---
+  const guardarFactura = async ({ cliente, productos, total, pago, ventaId }) => {
+    try {
+      const nuevaFactura = {
+        cliente,
+        productos,
+        total,
+        pago,
+        fecha: new Date().toISOString().slice(0, 10),
+        creada: Timestamp.now(),
+        ventaId: ventaId || undefined,
+      };
+      const docRef = await addDoc(collection(db, "facturas"), nuevaFactura);
+      setFactura({ ...nuevaFactura, id: docRef.id });
+      setMostrarModalFactura(true);
+    } catch (e) {
+      setMsg("❌ Error al guardar la factura: " + e.message);
+    }
+  };
+
+  // Guardar venta y actualizar stock y generar factura
   const finalizarVenta = async (ventaData) => {
     try {
       // 1. Guardar la venta
-      await addDoc(collection(db, "ventas"), {
+      const ventaDoc = await addDoc(collection(db, "ventas"), {
         ...ventaData,
         fecha: Timestamp.now(),
       });
@@ -378,6 +404,15 @@ export default function Ventas() {
       const qProductos = query(collection(db, "productos"), orderBy("nombre", "asc"));
       const snapshotProductos = await getDocs(qProductos);
       setProductos(snapshotProductos.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+
+      // ---- GENERAR FACTURA AUTOMÁTICA ----
+      await guardarFactura({
+        cliente: ventaData.cliente,
+        productos: ventaData.productos,
+        total: ventaData.total,
+        pago: ventaData.pago,
+        ventaId: ventaDoc.id,
+      });
 
     } catch (error) {
       setMsg("❌ Error al guardar venta");
@@ -601,6 +636,15 @@ export default function Ventas() {
         productosVenta={productosVenta}
         cliente={cliente}
         onGuardar={finalizarVenta}
+      />
+
+      {/* --- MODAL FACTURA (IMPRIMIR Y GUARDAR) --- */}
+      <ModalFactura
+        visible={mostrarModalFactura}
+        factura={factura}
+        onImprimir={() => window.print()}
+        onCerrar={() => setMostrarModalFactura(false)}
+        ref={facturaRef}
       />
     </div>
   );
