@@ -7,6 +7,8 @@ import {
   query,
   orderBy,
   Timestamp,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 import { formatCurrency } from "../utils/formatCurrency";
 
@@ -16,6 +18,8 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState(1);
   const [precio, setPrecio] = useState("");
+  const [observacion, setObservacion] = useState(""); // NUEVO
+
   const productoMatches = productos.filter(
     (p) =>
       p.nombre.toLowerCase().includes(productoQuery.toLowerCase()) ||
@@ -27,6 +31,7 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
     setProductoSeleccionado(null);
     setCantidad(1);
     setPrecio("");
+    setObservacion(""); // NUEVO
   }, [visible]);
 
   useEffect(() => {
@@ -106,6 +111,17 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
             </div>
           )}
         </div>
+        {/* CAMPO DE OBSERVACION */}
+        <div className="mb-3">
+          <textarea
+            className="input"
+            placeholder="Observación (opcional, ej: imperfecto, rayón, etc.)"
+            value={observacion}
+            onChange={e => setObservacion(e.target.value)}
+            rows={2}
+            disabled={!productoSeleccionado}
+          />
+        </div>
         {productoSeleccionado && (
           <div className="mb-3 text-gray-700">
             <div>
@@ -130,6 +146,7 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
                 precio: Number(precio),
                 cantidad: Number(cantidad),
                 subtotal: Number(precio) * Number(cantidad),
+                observacion, // NUEVO
               });
               onClose();
             }}
@@ -172,6 +189,9 @@ function ModalFinalizarVenta({ visible, onClose, productosVenta, cliente, onGuar
               <li key={i} className="flex justify-between">
                 <span>
                   {p.nombre} {p.codigo && <span className="text-gray-400 text-xs">({p.codigo})</span>} x {p.cantidad}
+                  {p.observacion && (
+                    <span className="block text-xs text-yellow-700 italic">Obs: {p.observacion}</span>
+                  )}
                 </span>
                 <span>
                   {formatCurrency(p.precio)} x {p.cantidad} ={" "}
@@ -262,6 +282,18 @@ function ModalFinalizarVenta({ visible, onClose, productosVenta, cliente, onGuar
   );
 }
 
+// --- FUNCION PARA SABER SI UNA FECHA ES DE HOY ---
+function esHoy(ts) {
+  if (!ts || typeof ts.toDate !== "function") return false;
+  const fecha = ts.toDate();
+  const hoy = new Date();
+  return (
+    fecha.getFullYear() === hoy.getFullYear() &&
+    fecha.getMonth() === hoy.getMonth() &&
+    fecha.getDate() === hoy.getDate()
+  );
+}
+
 // --- VENTAS PRINCIPAL ---
 export default function Ventas() {
   const [ventas, setVentas] = useState([]);
@@ -304,149 +336,151 @@ export default function Ventas() {
       (c.correo || "").toLowerCase().includes(clienteQuery.toLowerCase())
   );
 
+  // Ventas de hoy
+  const ventasHoy = ventas.filter(v => esHoy(v.fecha));
+  const cantidadVentasHoy = ventasHoy.length;
+  const totalVentasHoy = ventasHoy.reduce((a, v) => a + Number(v.total), 0);
+
+  // Guardar venta y actualizar stock
   const finalizarVenta = async (ventaData) => {
     try {
+      // 1. Guardar la venta
       await addDoc(collection(db, "ventas"), {
         ...ventaData,
         fecha: Timestamp.now(),
       });
+
+      // 2. Actualizar el stock de los productos vendidos
+      const batchUpdates = ventaData.productos.map(async (prod) => {
+        if (prod.id) {
+          const productoRef = doc(db, "productos", prod.id);
+          // Buscar el stock actual
+          const productoActual = productos.find(p => p.id === prod.id);
+          let stockActual = Number(productoActual?.stock || 0);
+          let nuevaCantidad = stockActual - Number(prod.cantidad);
+          if (nuevaCantidad < 0) nuevaCantidad = 0;
+          await updateDoc(productoRef, { stock: nuevaCantidad });
+        }
+      });
+      await Promise.all(batchUpdates);
+
       setMsg("✅ Venta registrada correctamente");
       setProductosVenta([]);
       setCliente("");
       setClienteQuery("");
       setModalFinalizar(false);
-      const q = query(collection(db, "ventas"), orderBy("fecha", "desc"));
-      const snapshot = await getDocs(q);
-      setVentas(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+      // Recargar ventas y productos (para actualizar stock en pantalla)
+      const qVentas = query(collection(db, "ventas"), orderBy("fecha", "desc"));
+      const snapshotVentas = await getDocs(qVentas);
+      setVentas(snapshotVentas.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+      const qProductos = query(collection(db, "productos"), orderBy("nombre", "asc"));
+      const snapshotProductos = await getDocs(qProductos);
+      setProductos(snapshotProductos.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+
     } catch (error) {
       setMsg("❌ Error al guardar venta");
     }
   };
 
-  const ventasFiltradas = ventas.filter((v) => {
-    const texto =
-      (v.cliente?.toLowerCase() || "") +
-      " " +
-      (v.productos?.map((p) => p.nombre).join(" ").toLowerCase() || "");
-    const coincideBusqueda = texto.includes(busqueda.toLowerCase());
-    const fecha = v.fecha?.toDate?.().toISOString().slice(0, 10);
-    const coincideFecha = !fechaFiltro || fecha === fechaFiltro;
-    return coincideBusqueda && coincideFecha;
-  });
-
-  const cantidadVentas = ventasFiltradas.length;
-  const totalVentas = ventasFiltradas.reduce((a, v) => a + Number(v.total), 0);
-
   return (
     <div className="max-w-6xl mx-auto py-8 animate-fade-in">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-blue-800 mb-1">Ventas</h2>
-          <p className="text-gray-600">Gestión y registro de tus ventas</p>
-        </div>
-        <button
-          className="btn-primary shadow-lg"
-          onClick={() => {
-            setProductosVenta([]);
-            setCliente("");
-            setClienteQuery("");
-            setModalProducto(true);
-          }}
-        >
-          + Nueva venta
-        </button>
-      </div>
-
-      {/* Resúmenes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="bg-blue-50 rounded-xl py-6 px-6 flex items-center gap-3 shadow">
-          <div className="bg-blue-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow">
-            🛒
-          </div>
+      {/* SECCIÓN VENTAS DE HOY */}
+      <div className="mb-12">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
           <div>
-            <div className="text-xl font-bold">{cantidadVentas}</div>
-            <div className="text-gray-500">Ventas registradas</div>
+            <h2 className="text-2xl font-bold text-blue-800 mb-1">Ventas de Hoy</h2>
+            <p className="text-gray-600">Solo se muestran las ventas realizadas hoy</p>
           </div>
+          <button
+            className="btn-primary shadow-lg"
+            onClick={() => {
+              setProductosVenta([]);
+              setCliente("");
+              setClienteQuery("");
+              setModalProducto(true);
+            }}
+          >
+            + Nueva venta
+          </button>
         </div>
-        <div className="bg-green-50 rounded-xl py-6 px-6 flex items-center gap-3 shadow">
-          <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow">
-            💰
-          </div>
-          <div>
-            <div className="text-xl font-bold">
-              {formatCurrency(totalVentas)}
+        {/* Estadísticas solo de hoy */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="bg-blue-50 rounded-xl py-6 px-6 flex items-center gap-3 shadow">
+            <div className="bg-blue-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow">
+              🛒
             </div>
-            <div className="text-gray-500">Monto total</div>
+            <div>
+              <div className="text-xl font-bold">{cantidadVentasHoy}</div>
+              <div className="text-gray-500">Ventas hoy</div>
+            </div>
+          </div>
+          <div className="bg-green-50 rounded-xl py-6 px-6 flex items-center gap-3 shadow">
+            <div className="bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-2xl shadow">
+              💰
+            </div>
+            <div>
+              <div className="text-xl font-bold">
+                {formatCurrency(totalVentasHoy)}
+              </div>
+              <div className="text-gray-500">Monto total de hoy</div>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-        <div className="flex flex-col md:flex-row gap-3">
-          <input
-            className="input"
-            placeholder="Buscar por cliente o producto..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-          />
-          <input
-            className="input"
-            type="date"
-            value={fechaFiltro}
-            onChange={(e) => setFechaFiltro(e.target.value)}
-          />
+        {/* Tabla solo con ventasHoy */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-blue-50 text-blue-900">
+                <th className="px-4 py-2">Cliente</th>
+                <th className="px-4 py-2">Productos</th>
+                <th className="px-4 py-2">Total</th>
+                <th className="px-4 py-2">Pago</th>
+                <th className="px-4 py-2">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventasHoy.map((venta) => (
+                <tr key={venta.id} className="border-b hover:bg-blue-50 transition">
+                  <td className="px-4 py-2">{venta.cliente}</td>
+                  <td className="px-4 py-2">
+                    <ul>
+                      {venta.productos?.map((p, i) => (
+                        <li key={i}>
+                          {p.nombre} x {p.cantidad} = {formatCurrency(p.subtotal)}
+                          {p.observacion && (
+                            <span className="block text-xs text-yellow-700 italic">Obs: {p.observacion}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td className="px-4 py-2">{formatCurrency(venta.total)}</td>
+                  <td className="px-4 py-2">
+                    {venta.pago?.metodo === "efectivo"
+                      ? `Efectivo (${venta.pago.recibido ? formatCurrency(venta.pago.recibido) : ""}${
+                          venta.pago.cambio ? `, cambio ${formatCurrency(venta.pago.cambio)}` : ""
+                        })`
+                      : "Transferencia"}
+                  </td>
+                  <td className="px-4 py-2">
+                    {venta.fecha?.toDate?.().toLocaleDateString?.() || ""}
+                  </td>
+                </tr>
+              ))}
+              {ventasHoy.length === 0 && (
+                <tr>
+                  <td className="px-4 py-3 text-center text-gray-400" colSpan={5}>
+                    No hay ventas hoy
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Tabla ventas */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6 overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-blue-50 text-blue-900">
-              <th className="px-4 py-2">Cliente</th>
-              <th className="px-4 py-2">Productos</th>
-              <th className="px-4 py-2">Total</th>
-              <th className="px-4 py-2">Pago</th>
-              <th className="px-4 py-2">Fecha</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ventasFiltradas.map((venta) => (
-              <tr key={venta.id} className="border-b hover:bg-blue-50 transition">
-                <td className="px-4 py-2">{venta.cliente}</td>
-                <td className="px-4 py-2">
-                  <ul>
-                    {venta.productos?.map((p, i) => (
-                      <li key={i}>
-                        {p.nombre} x {p.cantidad} = {formatCurrency(p.subtotal)}
-                      </li>
-                    ))}
-                  </ul>
-                </td>
-                <td className="px-4 py-2">{formatCurrency(venta.total)}</td>
-                <td className="px-4 py-2">
-                  {venta.pago?.metodo === "efectivo"
-                    ? `Efectivo (${venta.pago.recibido ? formatCurrency(venta.pago.recibido) : ""}${
-                        venta.pago.cambio ? `, cambio ${formatCurrency(venta.pago.cambio)}` : ""
-                      })`
-                    : "Transferencia"}
-                </td>
-                <td className="px-4 py-2">
-                  {venta.fecha?.toDate?.().toLocaleDateString?.() || ""}
-                </td>
-              </tr>
-            ))}
-            {ventasFiltradas.length === 0 && (
-              <tr>
-                <td className="px-4 py-3 text-center text-gray-400" colSpan={5}>
-                  No hay ventas en este filtro
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
       {msg && (
         <div className="text-center text-green-700 font-medium mb-8">
           {msg}
@@ -473,11 +507,14 @@ export default function Ventas() {
               {productosVenta.map((p, i) => (
                 <li
                   key={i}
-                  className="bg-blue-50 rounded px-3 py-1 flex items-center gap-2"
+                  className="bg-blue-50 rounded px-3 py-1 flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2"
                 >
                   <span>
                     {p.nombre} (x{p.cantidad}) = <span className="font-bold">{formatCurrency(p.subtotal)}</span>
                   </span>
+                  {p.observacion && (
+                    <span className="text-xs text-yellow-700 italic">Obs: {p.observacion}</span>
+                  )}
                   <button
                     className="btn-table-delete"
                     onClick={() =>

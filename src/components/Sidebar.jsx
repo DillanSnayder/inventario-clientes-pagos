@@ -5,6 +5,8 @@ const navItems = [
   { path: "/clientes", label: "Clientes", icon: "👤" },
   { path: "/productos", label: "Productos", icon: "📦" },
   { path: "/pagos", label: "Pagos", icon: "💳" },
+  { path: "/empleados", label: "Empleados", icon: "🫂" },
+  { path: "/estadisticas", label: "Estadisticas", icon: "↗️" },
 ];
 
 export default function Sidebar() {

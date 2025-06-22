@@ -3,6 +3,8 @@ import Clientes from "./pages/Clientes";
 import Proveedores from "./pages/Proveedores";
 import Productos from "./pages/Productos";
 import Ventas from "./pages/Ventas";
+import Empleados from "./pages/Empleados";
+import Estadisticas from "./pages/Estadisticas";
 
 function Sidebar({ selected, setSelected }) {
   const items = [
@@ -10,6 +12,8 @@ function Sidebar({ selected, setSelected }) {
     { label: "Clientes", icon: "👤" },
     { label: "Proveedor", icon: "🏢" },
     { label: "Productos", icon: "📦" },
+    { label: "Empleados", icon: "🫂" },
+    { label: "Estadisticas", icon: "↗️" },
   ];
   return (
     <aside className="bg-gray-900 text-white w-56 min-h-screen p-5 flex flex-col gap-2">
@@ -39,6 +43,8 @@ function MainContent({ selected }) {
       {selected === "Clientes" && <Clientes />}
       {selected === "Proveedor" && <Proveedores />}
       {selected === "Productos" && <Productos />}
+      {selected === "Empleados" && <Empleados/>}
+      {selected === "Estadisticas" && <Estadisticas/>}
     </div>
   );
 }
