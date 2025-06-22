@@ -1,3 +1,45 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.input {
+  @apply border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition w-full;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-semibold transition;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 font-semibold transition;
+}
+
+.btn-table-edit {
+  @apply bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded transition;
+}
+
+.btn-table-delete {
+  @apply bg-red-100 hover:bg-red-200 text-red-800 px-2 py-1 rounded transition;
+}
+.input {
+  @apply border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition w-full;
+}
+.btn-primary {
+  @apply bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-semibold transition;
+}
+.btn-secondary {
+  @apply bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 font-semibold transition;
+}
+.btn-table-edit {
+  @apply bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded transition;
+}
+.btn-table-delete {
+  @apply bg-red-100 hover:bg-red-200 text-red-800 px-2 py-1 rounded transition;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(20px);}
+  to { opacity: 1; transform: none;}
+}
+.animate-fade-in {
+  animation: fade-in 0.5s;
+}

@@ -1,43 +1,54 @@
-import { useState } from "react";
-import Ventas from "./components/Ventas";
+import React, { useState } from "react";
+import Clientes from "./pages/Clientes";
+import Proveedores from "./pages/Proveedores";
+import Productos from "./pages/Productos";
+import Ventas from "./pages/Ventas";
 
-function App() {
-  const [mostrarVentas, setMostrarVentas] = useState(false);
-
+function Sidebar({ selected, setSelected }) {
+  const items = [
+    { label: "Ventas", icon: "🛒" },
+    { label: "Clientes", icon: "👤" },
+    { label: "Proveedor", icon: "🏢" },
+    { label: "Productos", icon: "📦" },
+  ];
   return (
-    <div className="min-h-screen bg-gradient-to-tr from-blue-100 to-blue-300 flex items-center justify-center">
-      <div className="bg-white shadow-2xl rounded-3xl p-12 w-full max-w-3xl flex flex-col items-center">
-        {!mostrarVentas ? (
-          <>
-            <h1 className="text-4xl font-extrabold text-blue-900 mb-4">Bienvenido</h1>
-            <p className="mb-8 text-lg text-gray-700 text-center">
-              Este es tu sistema de control de clientes, productos y ventas.<br />
-              Haz clic en el siguiente botón para comenzar a registrar ventas.
-            </p>
-            <button
-              className="px-8 py-4 text-xl bg-blue-700 hover:bg-blue-800 transition text-white rounded-full shadow-lg font-bold"
-              onClick={() => setMostrarVentas(true)}
-            >
-              Ir a Ventas 🚀
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="w-full flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-blue-900">Gestión de Ventas</h2>
-              <button
-                className="py-2 px-5 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-700 font-semibold"
-                onClick={() => setMostrarVentas(false)}
-              >
-                ← Volver
-              </button>
-            </div>
-            <Ventas />
-          </>
-        )}
-      </div>
+    <aside className="bg-gray-900 text-white w-56 min-h-screen p-5 flex flex-col gap-2">
+      <h2 className="text-xl font-bold mb-8">Inventario Dashboard</h2>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          onClick={() => setSelected(item.label)}
+          className={`flex items-center gap-3 px-4 py-2 rounded transition ${
+            selected === item.label
+              ? "bg-blue-600 font-bold"
+              : "hover:bg-gray-700"
+          }`}
+        >
+          <span>{item.icon}</span>
+          {item.label}
+        </button>
+      ))}
+    </aside>
+  );
+}
+
+function MainContent({ selected }) {
+  return (
+    <div className="flex-1 p-10 bg-gray-50 min-h-screen">
+      {selected === "Ventas" && <Ventas />}
+      {selected === "Clientes" && <Clientes />}
+      {selected === "Proveedor" && <Proveedores />}
+      {selected === "Productos" && <Productos />}
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  const [selected, setSelected] = useState("Ventas");
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar selected={selected} setSelected={setSelected} />
+      <MainContent selected={selected} />
+    </div>
+  );
+}
