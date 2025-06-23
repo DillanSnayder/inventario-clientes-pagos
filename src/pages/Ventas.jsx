@@ -13,13 +13,21 @@ import {
 import { formatCurrency } from "../utils/formatCurrency";
 import ModalFactura from "../components/ModalFactura";
 
+// --- Formatea números con puntos de miles ---
+function formatNumberWithDots(value) {
+  let clean = String(value).replace(/\D/g, "");
+  if (!clean) return "";
+  return clean.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 // --- MODAL PARA AGREGAR PRODUCTOS ---
-function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
+function ModalAgregarProducto({ visible, onClose, onAgregar, productos, productosVenta }) {
   const [productoQuery, setProductoQuery] = useState("");
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState(1);
   const [precio, setPrecio] = useState("");
-  const [observacion, setObservacion] = useState(""); // NUEVO
+  const [observacion, setObservacion] = useState("");
+  const [errorStock, setErrorStock] = useState("");
 
   const productoMatches = productos.filter(
     (p) =>
@@ -32,7 +40,8 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
     setProductoSeleccionado(null);
     setCantidad(1);
     setPrecio("");
-    setObservacion(""); // NUEVO
+    setObservacion("");
+    setErrorStock("");
   }, [visible]);
 
   useEffect(() => {
@@ -44,6 +53,32 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
       setPrecio(raw > 0 ? String(raw) : "");
     }
   }, [productoSeleccionado]);
+
+  const handleAgregar = () => {
+    if (!productoSeleccionado) return;
+
+    const stockDisponible = Number(productoSeleccionado.stock || 0);
+    const enCarrito = productosVenta
+      .filter(p => p.id === productoSeleccionado.id)
+      .reduce((acc, p) => acc + Number(p.cantidad), 0);
+
+    if (Number(cantidad) + enCarrito > stockDisponible) {
+      setErrorStock(
+        `No hay suficiente stock para "${productoSeleccionado.nombre}". Stock disponible: ${stockDisponible - enCarrito}`
+      );
+      return;
+    }
+
+    setErrorStock("");
+    onAgregar({
+      ...productoSeleccionado,
+      precio: Number(precio),
+      cantidad: Number(cantidad),
+      subtotal: Number(precio) * Number(cantidad),
+      observacion,
+    });
+    onClose();
+  };
 
   if (!visible) return null;
 
@@ -112,7 +147,6 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
             </div>
           )}
         </div>
-        {/* CAMPO DE OBSERVACION */}
         <div className="mb-3">
           <textarea
             className="input"
@@ -137,20 +171,14 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
             </div>
           </div>
         )}
+        {errorStock && (
+          <div className="mb-3 text-red-600 font-semibold">{errorStock}</div>
+        )}
         <div className="flex gap-2">
           <button
             className="btn-primary flex-1"
             disabled={!productoSeleccionado || !cantidad || !precio}
-            onClick={() => {
-              onAgregar({
-                ...productoSeleccionado,
-                precio: Number(precio),
-                cantidad: Number(cantidad),
-                subtotal: Number(precio) * Number(cantidad),
-                observacion, // NUEVO
-              });
-              onClose();
-            }}
+            onClick={handleAgregar}
           >
             Agregar
           </button>
@@ -163,13 +191,36 @@ function ModalAgregarProducto({ visible, onClose, onAgregar, productos }) {
   );
 }
 
+// --- MODAL DE VENTA FINALIZADA ---
+function ModalVentaFinalizada({ visible, onClose, onImprimir }) {
+  if (!visible) return null;
+  return (
+    <div className="fixed z-50 inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm animate-fade-in text-center">
+        <div className="text-green-600 text-4xl mb-4">✔️</div>
+        <h3 className="text-2xl font-bold mb-2">¡Venta finalizada!</h3>
+        <p className="mb-6">La venta se registró correctamente.</p>
+        <div className="flex gap-2 justify-center">
+          <button className="btn-primary" onClick={onImprimir}>
+            Imprimir factura
+          </button>
+          <button className="btn-secondary" onClick={onClose}>
+            Aceptar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- MODAL FINALIZAR VENTA ---
-function ModalFinalizarVenta({ visible, onClose, productosVenta, cliente, onGuardar }) {
+function ModalFinalizarVenta({ visible, onClose, productosVenta, cliente, onFinalizarVenta }) {
   const [metodo, setMetodo] = useState("efectivo");
   const [recibido, setRecibido] = useState("");
   const [msg, setMsg] = useState("");
   const total = productosVenta.reduce((a, p) => a + p.subtotal, 0);
-  const cambio = metodo === "efectivo" && recibido ? recibido - total : 0;
+  const recibidoNumero = Number(recibido.replace(/\./g, ""));
+  const cambio = metodo === "efectivo" && recibido ? recibidoNumero - total : 0;
 
   useEffect(() => {
     setMetodo("efectivo");
@@ -229,15 +280,19 @@ function ModalFinalizarVenta({ visible, onClose, productosVenta, cliente, onGuar
             <div className="font-semibold mb-1">Dinero recibido:</div>
             <input
               className="input"
-              type="number"
+              type="text"
+              inputMode="numeric"
               min={total}
               placeholder="Ingresa el monto recibido"
               value={recibido}
-              onChange={(e) => setRecibido(Number(e.target.value))}
+              onChange={(e) => {
+                const val = formatNumberWithDots(e.target.value);
+                setRecibido(val);
+              }}
             />
             {recibido !== "" && (
               <div className="mt-2 text-blue-700">
-                {recibido < total ? (
+                {recibidoNumero < total ? (
                   <span>⚠️ El monto recibido es menor al total</span>
                 ) : (
                   <span>
@@ -256,17 +311,17 @@ function ModalFinalizarVenta({ visible, onClose, productosVenta, cliente, onGuar
           <button
             className="btn-primary flex-1"
             onClick={() => {
-              if (metodo === "efectivo" && (recibido === "" || recibido < total)) {
+              if (metodo === "efectivo" && (recibido === "" || recibidoNumero < total)) {
                 setMsg("El monto recibido debe ser igual o mayor al total.");
                 return;
               }
-              onGuardar({
+              onFinalizarVenta({
                 cliente: cliente || "N/A",
                 productos: productosVenta,
                 total,
                 pago: {
                   metodo,
-                  recibido: metodo === "efectivo" ? recibido : total,
+                  recibido: metodo === "efectivo" ? recibidoNumero : total,
                   cambio: metodo === "efectivo" ? cambio : 0,
                 },
               });
@@ -296,7 +351,7 @@ function esHoy(ts) {
 }
 
 // --- VENTAS PRINCIPAL ---
-export default function Ventas() {
+export default function Ventas({ onVentaFinalizada }) {
   const [ventas, setVentas] = useState([]);
   const [modalProducto, setModalProducto] = useState(false);
   const [modalFinalizar, setModalFinalizar] = useState(false);
@@ -310,10 +365,11 @@ export default function Ventas() {
   const [fechaFiltro, setFechaFiltro] = useState("");
   const [showClienteSug, setShowClienteSug] = useState(false);
 
-  // --- Para Factura ---
+  // --- Para Factura y venta finalizada ---
   const [mostrarModalFactura, setMostrarModalFactura] = useState(false);
   const [factura, setFactura] = useState(null);
   const facturaRef = useRef();
+  const [mostrarModalVentaFinalizada, setMostrarModalVentaFinalizada] = useState(false);
 
   useEffect(() => {
     const obtenerVentas = async () => {
@@ -361,15 +417,28 @@ export default function Ventas() {
       };
       const docRef = await addDoc(collection(db, "facturas"), nuevaFactura);
       setFactura({ ...nuevaFactura, id: docRef.id });
-      setMostrarModalFactura(true);
+      // No mostrar el modal de factura automáticamente aquí
     } catch (e) {
       setMsg("❌ Error al guardar la factura: " + e.message);
     }
   };
 
-  // Guardar venta y actualizar stock y generar factura
-  const finalizarVenta = async (ventaData) => {
+  // --- FINALIZAR VENTA EN SEGUNDO PLANO ---
+  const finalizarVentaEnSegundoPlano = async (ventaData) => {
     try {
+      // Validar que no cambió el stock mientras tanto (protección extra)
+      const productosConFalta = ventaData.productos.filter(prod => {
+        const productoActual = productos.find(p => p.id === prod.id);
+        return Number(prod.cantidad) > Number(productoActual?.stock || 0);
+      });
+      if (productosConFalta.length > 0) {
+        setMsg(
+          "❌ No hay suficiente stock para: " +
+          productosConFalta.map(p => `${p.nombre} (stock: ${productos.find(prod => prod.id === p.id)?.stock || 0})`).join(", ")
+        );
+        return;
+      }
+
       // 1. Guardar la venta
       const ventaDoc = await addDoc(collection(db, "ventas"), {
         ...ventaData,
@@ -380,7 +449,6 @@ export default function Ventas() {
       const batchUpdates = ventaData.productos.map(async (prod) => {
         if (prod.id) {
           const productoRef = doc(db, "productos", prod.id);
-          // Buscar el stock actual
           const productoActual = productos.find(p => p.id === prod.id);
           let stockActual = Number(productoActual?.stock || 0);
           let nuevaCantidad = stockActual - Number(prod.cantidad);
@@ -389,12 +457,6 @@ export default function Ventas() {
         }
       });
       await Promise.all(batchUpdates);
-
-      setMsg("✅ Venta registrada correctamente");
-      setProductosVenta([]);
-      setCliente("");
-      setClienteQuery("");
-      setModalFinalizar(false);
 
       // Recargar ventas y productos (para actualizar stock en pantalla)
       const qVentas = query(collection(db, "ventas"), orderBy("fecha", "desc"));
@@ -405,7 +467,7 @@ export default function Ventas() {
       const snapshotProductos = await getDocs(qProductos);
       setProductos(snapshotProductos.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
 
-      // ---- GENERAR FACTURA AUTOMÁTICA ----
+      // --- GENERAR FACTURA AUTOMÁTICA (no mostrar modal aquí) ---
       await guardarFactura({
         cliente: ventaData.cliente,
         productos: ventaData.productos,
@@ -414,9 +476,33 @@ export default function Ventas() {
         ventaId: ventaDoc.id,
       });
 
+      if (onVentaFinalizada) onVentaFinalizada();
+
     } catch (error) {
       setMsg("❌ Error al guardar venta");
     }
+  };
+
+  // --- FLUJO RAPIDO: FINALIZAR VENTA Y MOSTRAR MODAL DE EXITO ---
+  const handleFinalizarVentaRapido = (ventaData) => {
+    setMsg(""); // Limpia mensajes
+    setProductosVenta([]);
+    setCliente("");
+    setClienteQuery("");
+    setModalFinalizar(false);
+    setMostrarModalVentaFinalizada(true);  // Muestra modal de éxito
+    finalizarVentaEnSegundoPlano(ventaData);
+  };
+
+  // --- Acción al darle "Imprimir factura" en el modal de venta finalizada ---
+  const handleImprimirFactura = () => {
+    setMostrarModalVentaFinalizada(false);
+    setMostrarModalFactura(true);
+  };
+
+  // --- Acción al darle "Aceptar" en el modal de venta finalizada ---
+  const handleAceptarVentaFinalizada = () => {
+    setMostrarModalVentaFinalizada(false);
   };
 
   return (
@@ -494,9 +580,7 @@ export default function Ventas() {
                   <td className="px-4 py-2">{formatCurrency(venta.total)}</td>
                   <td className="px-4 py-2">
                     {venta.pago?.metodo === "efectivo"
-                      ? `Efectivo (${venta.pago.recibido ? formatCurrency(venta.pago.recibido) : ""}${
-                          venta.pago.cambio ? `, cambio ${formatCurrency(venta.pago.cambio)}` : ""
-                        })`
+                      ? `Efectivo (${venta.pago.recibido ? formatCurrency(venta.pago.recibido) : ""}${venta.pago.cambio ? `, cambio ${formatCurrency(venta.pago.cambio)}` : ""})`
                       : "Transferencia"}
                   </td>
                   <td className="px-4 py-2">
@@ -531,6 +615,7 @@ export default function Ventas() {
           setModalProducto(false);
         }}
         productos={productos}
+        productosVenta={productosVenta}
       />
 
       {/* Pantalla de carrito temporal y finalizar venta */}
@@ -626,6 +711,18 @@ export default function Ventas() {
             >
               Finalizar venta
             </button>
+  
+      {/* --- BOTÓN CANCELAR VENTA --- */}
+      <button
+        className="btn-danger"
+        onClick={() => {
+          setProductosVenta([]);
+          setCliente("");
+          setClienteQuery("");
+        }}
+      >
+        Cancelar venta
+      </button>
           </div>
         </div>
       )}
@@ -635,10 +732,16 @@ export default function Ventas() {
         onClose={() => setModalFinalizar(false)}
         productosVenta={productosVenta}
         cliente={cliente}
-        onGuardar={finalizarVenta}
+        onFinalizarVenta={handleFinalizarVentaRapido}
       />
 
-      {/* --- MODAL FACTURA (IMPRIMIR Y GUARDAR) --- */}
+      {/* --- MODAL DE VENTA FINALIZADA --- */}
+      <ModalVentaFinalizada
+        visible={mostrarModalVentaFinalizada}
+        onClose={handleAceptarVentaFinalizada}
+        onImprimir={handleImprimirFactura}
+      />
+
       <ModalFactura
         visible={mostrarModalFactura}
         factura={factura}

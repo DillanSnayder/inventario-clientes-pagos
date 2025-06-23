@@ -3,6 +3,7 @@ import Clientes from "./pages/Clientes";
 import Proveedores from "./pages/Proveedores";
 import Productos from "./pages/Productos";
 import Ventas from "./pages/Ventas";
+import NotificacionesStock from './components/NotificacionesStock';
 import Empleados from "./pages/Empleados";
 import Estadisticas from "./pages/Estadisticas";
 
@@ -36,10 +37,10 @@ function Sidebar({ selected, setSelected }) {
   );
 }
 
-function MainContent({ selected }) {
+function MainContent({ selected, onVentaFinalizada }) {
   return (
     <div className="flex-1 p-10 bg-gray-50 min-h-screen">
-      {selected === "Ventas" && <Ventas />}
+      {selected === "Ventas" && <Ventas onVentaFinalizada={onVentaFinalizada} />}
       {selected === "Clientes" && <Clientes />}
       {selected === "Proveedor" && <Proveedores />}
       {selected === "Productos" && <Productos />}
@@ -51,10 +52,18 @@ function MainContent({ selected }) {
 
 export default function App() {
   const [selected, setSelected] = useState("Ventas");
+  const [reloadStockKey, setReloadStockKey] = useState(0);
+
+  // Esta función se pasa a Ventas y se llama después de finalizar una venta
+  const handleVentaFinalizada = () => setReloadStockKey(k => k + 1);
+
   return (
     <div className="flex min-h-screen">
       <Sidebar selected={selected} setSelected={setSelected} />
-      <MainContent selected={selected} />
+      <div className="flex-1 relative">
+        <NotificacionesStock umbral={5} reloadKey={reloadStockKey} />
+        <MainContent selected={selected} onVentaFinalizada={handleVentaFinalizada} />
+      </div>
     </div>
   );
 }
