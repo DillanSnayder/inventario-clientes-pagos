@@ -7,10 +7,12 @@ import NotificacionesStock from './components/NotificacionesStock';
 import Empleados from "./pages/Empleados";
 import Estadisticas from "./pages/Estadisticas";
 import Negocio from "./pages/Negocio";
+import Finanzas from "./pages/Finanzas";
 
 function Sidebar({ selected, setSelected }) {
   const items = [
     { label: "Empresa", icon: "🏢" },
+    { label: "Finanzas", icon: "💶" },
     { label: "Ventas", icon: "🛒" },
     { label: "Clientes", icon: "👤" },
     { label: "Proveedor", icon: "🏢" },
@@ -49,6 +51,7 @@ function MainContent({ selected, onVentaFinalizada }) {
       {selected === "Empleados" && <Empleados/>}
       {selected === "Estadisticas" && <Estadisticas/>}
       {selected === "Empresa" && <Negocio/>}
+      {selected === "Finanzas" && <Finanzas/>}
     </div>
   );
 }

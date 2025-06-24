@@ -1,38 +1,38 @@
-import { Link, useLocation } from "react-router-dom";
+import useNombreNegocio from "../hooks/useNombreNegocio";
 
-const navItems = [
-  { path: "/negocio", label: "Datos de la empresa", icon: "🏢" },
-  { path: "/dashboard", label: "Dashboard", icon: "🏠" },
-  { path: "/clientes", label: "Clientes", icon: "👤" },
-  { path: "/productos", label: "Productos", icon: "📦" },
-  { path: "/pagos", label: "Pagos", icon: "💳" },
-  { path: "/empleados", label: "Empleados", icon: "🫂" },
-  { path: "/estadisticas", label: "Estadisticas", icon: "↗️" },
-];
-
-export default function Sidebar() {
-  const location = useLocation();
+export default function Sidebar({ selected, setSelected }) {
+  const nombreNegocio = useNombreNegocio();
+  const items = [
+    { label: "Empresa", icon: "🏢" },
+    { label: "Ventas", icon: "🛒" },
+    { label: "Clientes", icon: "👤" },
+    { label: "Proveedor", icon: "🏢" },
+    { label: "Productos", icon: "📦" },
+    { label: "Empleados", icon: "🫂" },
+    { label: "Estadisticas", icon: "↗️" },
+    { label: "Finanzas", icon: "💶" },
+  ];
+  // Para depurar
+  // console.log("Nombre negocio", nombreNegocio);
   return (
-    <aside className="bg-gradient-to-b from-blue-900 to-blue-700 text-white w-64 min-h-screen flex flex-col shadow-lg">
-      <div className="p-6 text-2xl font-bold tracking-widest border-b border-blue-800">
-        Panel Admin
-      </div>
-      <nav className="flex-1 p-4 flex flex-col gap-2">
-        {navItems.map(item => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`flex items-center gap-3 px-4 py-2 rounded-lg font-medium transition 
-              ${location.pathname === item.path ? "bg-blue-600 shadow" : "hover:bg-blue-800"}`}
-          >
-            <span>{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      <div className="p-4 border-t border-blue-800 text-sm text-blue-200">
-        <span>© {new Date().getFullYear()} Tu Empresa</span>
-      </div>
+    <aside className="bg-gray-900 text-white w-56 min-h-screen p-5 flex flex-col gap-2">
+      <h2 className="text-xl font-bold mb-8 text-center">
+        {nombreNegocio }
+      </h2>
+      {items.map((item) => (
+        <button
+          key={item.label}
+          onClick={() => setSelected(item.label)}
+          className={`flex items-center gap-3 px-4 py-2 rounded transition ${
+            selected === item.label
+              ? "bg-blue-600 font-bold"
+              : "hover:bg-gray-700"
+          }`}
+        >
+          <span>{item.icon}</span>
+          {item.label}
+        </button>
+      ))}
     </aside>
   );
 }
