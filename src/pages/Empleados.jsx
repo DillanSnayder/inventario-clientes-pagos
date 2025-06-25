@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
 import { db, storage } from "../services/firebaseConfig";
 import {
-  collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  doc,
-  orderBy,
-  query,
-  Timestamp,
+  collection, addDoc, getDocs, updateDoc, deleteDoc, doc, orderBy, query, Timestamp, where,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import {
+  ModalHorario,
+  ModalAusencia,
+  ModalVacacionPermiso,
+  ModalDocumentos,
+} from "../components/ModalEmpleado";
+import { ModalNuevoEmpleado } from "../components/ModalNuevoEmpleado";
 
 function formatCurrency(num) {
   return Number(num).toLocaleString("es-CO", {
@@ -21,168 +20,116 @@ function formatCurrency(num) {
   });
 }
 
-// MODALES PARA CADA FUNCIONALIDAD EXTRA
-function ModalHorario({ visible, onClose, empleado, onGuardar }) {
-  // Horario: [{dia: "Lunes", entrada: "08:00", salida: "17:00"}, ...]
-  const [horario, setHorario] = useState([
-    { dia: "Lunes", entrada: "", salida: "" },
-    { dia: "Martes", entrada: "", salida: "" },
-    { dia: "Miércoles", entrada: "", salida: "" },
-    { dia: "Jueves", entrada: "", salida: "" },
-    { dia: "Viernes", entrada: "", salida: "" },
-    { dia: "Sábado", entrada: "", salida: "" },
-    { dia: "Domingo", entrada: "", salida: "" },
-  ]);
-
-  useEffect(() => {
-    if (empleado?.horario) setHorario(empleado.horario);
-  }, [empleado, visible]);
-
-  if (!visible || !empleado) return null;
+function TablaRegistros({ tipo, registros, onEliminar, seleccionados, setSeleccionados }) {
+  const allSelected = registros.length > 0 && Object.keys(seleccionados).length === registros.length;
   return (
-    <div className="fixed z-50 inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
-      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-lg animate-fade-in">
-        <h3 className="text-xl font-bold mb-4 text-blue-700">Horario de {empleado.nombre}</h3>
-        <table className="mb-4 w-full text-xs">
+    <div className="mb-4">
+      <h4 className="font-bold mb-1 capitalize">{tipo} <span className="text-xs text-gray-500">({registros.length})</span></h4>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-xs">
+          <thead>
+            <tr>
+              <th><input type="checkbox" checked={allSelected} onChange={() => {
+                if (allSelected) setSeleccionados({});
+                else {
+                  const obj = {};
+                  registros.forEach(r => { obj[r.id] = true; });
+                  setSeleccionados(obj);
+                }
+              }} /></th>
+              {tipo === "ausencias" && <>
+                <th>Fecha</th><th>Justificación</th>
+              </>}
+              {tipo === "vacaciones" && <>
+                <th>Inicio</th><th>Fin</th><th>Motivo</th>
+              </>}
+              {tipo === "permisos" && <>
+                <th>Inicio</th><th>Fin</th><th>Motivo</th>
+              </>}
+              {tipo === "documentos" && <>
+                <th>Nombre</th><th>Ver</th>
+              </>}
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
-            {horario.map((h, idx) => (
-              <tr key={h.dia}>
-                <td className="pr-2">{h.dia}</td>
+            {registros.map(r => (
+              <tr key={r.id}>
                 <td>
-                  <input
-                    className="input"
-                    type="time"
-                    value={h.entrada}
-                    onChange={e => {
-                      const n = [...horario];
-                      n[idx].entrada = e.target.value;
-                      setHorario(n);
-                    }}
+                  <input type="checkbox"
+                    checked={!!seleccionados[r.id]}
+                    onChange={e => setSeleccionados(sel => ({
+                      ...sel,
+                      [r.id]: e.target.checked
+                    }))}
                   />
                 </td>
+                {tipo === "ausencias" && <>
+                  <td>{r.fecha}</td>
+                  <td>{r.justificacion}</td>
+                </>}
+                {tipo === "vacaciones" && <>
+                  <td>{r.inicio}</td>
+                  <td>{r.fin}</td>
+                  <td>{r.motivo}</td>
+                </>}
+                {tipo === "permisos" && <>
+                  <td>{r.inicio}</td>
+                  <td>{r.fin}</td>
+                  <td>{r.motivo}</td>
+                </>}
+                {tipo === "documentos" && <>
+                  <td>{r.nombreDoc}</td>
+                  <td>
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Ver</a>
+                  </td>
+                </>}
                 <td>
-                  <input
-                    className="input"
-                    type="time"
-                    value={h.salida}
-                    onChange={e => {
-                      const n = [...horario];
-                      n[idx].salida = e.target.value;
-                      setHorario(n);
-                    }}
-                  />
+                  <button className="btn-danger" onClick={() => onEliminar([r.id])}>Eliminar</button>
                 </td>
               </tr>
             ))}
+            {registros.length === 0 && (
+              <tr>
+                <td colSpan={tipo === "documentos" ? 4 : 5} className="text-center text-gray-400 py-2">Sin registros</td>
+              </tr>
+            )}
           </tbody>
         </table>
-        <div className="flex gap-2">
-          <button className="btn-primary flex-1" onClick={() => { onGuardar(horario); onClose(); }}>
-            Guardar
-          </button>
-          <button className="btn-secondary flex-1" onClick={onClose}>Cancelar</button>
-        </div>
+      </div>
+      <div className="mt-2">
+        <button
+          className="btn-danger"
+          disabled={Object.values(seleccionados).filter(Boolean).length === 0}
+          onClick={() => onEliminar(Object.keys(seleccionados))}
+        >Eliminar seleccionados</button>
       </div>
     </div>
   );
 }
 
-function ModalAusencia({ visible, onClose, empleado, onRegistrar }) {
-  const [fecha, setFecha] = useState("");
-  const [justificacion, setJustificacion] = useState("");
-  useEffect(() => { setFecha(""); setJustificacion(""); }, [visible]);
-  if (!visible || !empleado) return null;
+function LiquidacionSimulador({ empleado }) {
+  if (!empleado?.fechaIngreso || !empleado?.salario) return null;
+  const hoy = new Date();
+  const ingreso = new Date(empleado.fechaIngreso);
+  const ms = hoy - ingreso;
+  const diasTrabajados = Math.floor(ms / (1000 * 60 * 60 * 24));
+  const salario = Number(empleado.salario);
+  const cesantias = (salario * diasTrabajados) / 360;
+  const vacaciones = (salario * diasTrabajados) / 720;
   return (
-    <div className="fixed z-50 inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
-      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-fade-in">
-        <h3 className="text-xl font-bold mb-4 text-red-700">Registrar Ausencia</h3>
-        <div className="mb-3">
-          <label className="block text-xs mb-1">Fecha:</label>
-          <input className="input" type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
-        </div>
-        <div className="mb-3">
-          <textarea className="input" rows={2} value={justificacion}
-            placeholder="Justificación (obligatoria)" onChange={e => setJustificacion(e.target.value)} />
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-primary flex-1" disabled={!fecha || !justificacion}
-            onClick={() => { onRegistrar({ fecha, justificacion }); onClose(); }}>
-            Registrar
-          </button>
-          <button className="btn-secondary flex-1" onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
+    <div className="bg-yellow-50 rounded-xl p-4 mt-4">
+      <h4 className="font-bold mb-2 text-yellow-800">Simulación de liquidación</h4>
+      <p><b>Días laborados:</b> {diasTrabajados}</p>
+      <p><b>Cesantías (aprox):</b> {formatCurrency(cesantias)}</p>
+      <p><b>Vacaciones (aprox):</b> {formatCurrency(vacaciones)}</p>
     </div>
   );
 }
 
-function ModalVacacionPermiso({ visible, onClose, empleado, onRegistrar, tipo }) {
-  const [inicio, setInicio] = useState("");
-  const [fin, setFin] = useState("");
-  const [motivo, setMotivo] = useState("");
-  useEffect(() => { setInicio(""); setFin(""); setMotivo(""); }, [visible]);
-  if (!visible || !empleado) return null;
-  return (
-    <div className="fixed z-50 inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
-      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-fade-in">
-        <h3 className="text-xl font-bold mb-4 text-orange-700">
-          Registrar {tipo === "vacacion" ? "Vacaciones" : "Permiso"}
-        </h3>
-        <div className="mb-3">
-          <label className="block text-xs mb-1">Desde:</label>
-          <input className="input" type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
-        </div>
-        <div className="mb-3">
-          <label className="block text-xs mb-1">Hasta:</label>
-          <input className="input" type="date" value={fin} onChange={e => setFin(e.target.value)} />
-        </div>
-        <div className="mb-3">
-          <textarea className="input" rows={2} value={motivo}
-            placeholder="Motivo" onChange={e => setMotivo(e.target.value)} />
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-primary flex-1" disabled={!inicio || !fin || !motivo}
-            onClick={() => { onRegistrar({ inicio, fin, motivo, tipo }); onClose(); }}>
-            Registrar
-          </button>
-          <button className="btn-secondary flex-1" onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModalDocumentos({ visible, onClose, empleado, onSubir }) {
-  const [archivo, setArchivo] = useState(null);
-  const [nombre, setNombre] = useState("");
-  if (!visible || !empleado) return null;
-  return (
-    <div className="fixed z-50 inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
-      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-fade-in">
-        <h3 className="text-xl font-bold mb-4 text-blue-800">Adjuntar Documento</h3>
-        <div className="mb-3">
-          <input className="input" placeholder="Nombre documento" value={nombre}
-            onChange={e => setNombre(e.target.value)} />
-        </div>
-        <div className="mb-3">
-          <input type="file" onChange={e => setArchivo(e.target.files[0])} />
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-primary flex-1" disabled={!archivo || !nombre}
-            onClick={() => { onSubir(archivo, nombre); onClose(); }}>
-            Subir
-          </button>
-          <button className="btn-secondary flex-1" onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// PRINCIPAL
 export default function Empleados() {
-const [empleados, setEmpleados] = useState([]);
-const [modal, setModal] = useState(false);
+  const [empleados, setEmpleados] = useState([]);
+  const [modalNuevo, setModalNuevo] = useState(false);
   const [empleadoHorario, setEmpleadoHorario] = useState(null);
   const [modalHorario, setModalHorario] = useState(false);
   const [modalAusencia, setModalAusencia] = useState(false);
@@ -194,18 +141,78 @@ const [modal, setModal] = useState(false);
   const [modalDocumentos, setModalDocumentos] = useState(false);
   const [empleadoDocumentos, setEmpleadoDocumentos] = useState(null);
 
-  // ... cargar empleados y sus relaciones, estados de ausencias, vacaciones, permisos, docs ...
+  const [ausencias, setAusencias] = useState([]);
+  const [vacaciones, setVacaciones] = useState([]);
+  const [permisos, setPermisos] = useState([]);
+  const [documentos, setDocumentos] = useState([]);
+  const [selAus, setSelAus] = useState({});
+  const [selVac, setSelVac] = useState({});
+  const [selPer, setSelPer] = useState({});
+  const [selDoc, setSelDoc] = useState({});
+  const [empleadoSel, setEmpleadoSel] = useState(null);
 
-  // guardar/actualizar horario
+  useEffect(() => {
+    async function cargar() {
+      const q = query(collection(db, "empleados"), orderBy("nombre"));
+      const snap = await getDocs(q);
+      setEmpleados(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+    cargar();
+  }, []);
+
+  async function recargarEmpleados() {
+    const q = query(collection(db, "empleados"), orderBy("nombre"));
+    const snap = await getDocs(q);
+    setEmpleados(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }
+
+  async function crearEmpleado(form) {
+    await addDoc(collection(db, "empleados"), {
+      ...form,
+      salario: Number(form.salario),
+      creado: Timestamp.now(),
+    });
+    setModalNuevo(false);
+    await recargarEmpleados();
+  }
+
+  useEffect(() => {
+    async function cargarRegistros() {
+      if (!empleadoSel) return;
+      const qA = query(collection(db, "ausencias"), where("empleadoId", "==", empleadoSel.id));
+      const qV = query(collection(db, "vacaciones"), where("empleadoId", "==", empleadoSel.id));
+      const qP = query(collection(db, "permisos"), where("empleadoId", "==", empleadoSel.id));
+      const qD = query(collection(db, "documentos"), where("empleadoId", "==", empleadoSel.id));
+      setSelAus({}); setSelVac({}); setSelPer({}); setSelDoc({});
+      const [sA, sV, sP, sD] = await Promise.all([
+        getDocs(qA), getDocs(qV), getDocs(qP), getDocs(qD)
+      ]);
+      setAusencias(sA.docs.map(d => ({ id: d.id, ...d.data() })));
+      setVacaciones(sV.docs.map(d => ({ id: d.id, ...d.data() })));
+      setPermisos(sP.docs.map(d => ({ id: d.id, ...d.data() })));
+      setDocumentos(sD.docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+    cargarRegistros();
+  }, [empleadoSel, modalAusencia, modalVacacion, modalPermiso, modalDocumentos]);
+
+  async function eliminarRegistros(ids, coleccion, setSeleccionados, recargar) {
+    for (const id of ids) {
+      await deleteDoc(doc(db, coleccion, id));
+    }
+    setSeleccionados({});
+    recargar();
+  }
+
   const guardarHorario = async (horario) => {
     const ref = doc(db, "empleados", empleadoHorario.id);
     await updateDoc(ref, { horario });
     setEmpleadoHorario(null);
     setModalHorario(false);
-    // refrescar empleados...
+    setEmpleados(e => e.map(emp =>
+      emp.id === empleadoHorario.id ? { ...emp, horario } : emp
+    ));
   };
 
-  // registrar ausencia
   const registrarAusencia = async ({ fecha, justificacion }) => {
     await addDoc(collection(db, "ausencias"), {
       empleadoId: empleadoAusencia.id,
@@ -216,10 +223,8 @@ const [modal, setModal] = useState(false);
     });
     setModalAusencia(false);
     setEmpleadoAusencia(null);
-    // refrescar ausencias...
   };
 
-  // registrar vacacion/permiso
   const registrarVacPerm = async ({ inicio, fin, motivo, tipo }) => {
     await addDoc(collection(db, tipo === "vacacion" ? "vacaciones" : "permisos"), {
       empleadoId: tipo === "vacacion" ? empleadoVacacion.id : empleadoPermiso.id,
@@ -236,10 +241,8 @@ const [modal, setModal] = useState(false);
       setEmpleadoPermiso(null);
       setModalPermiso(false);
     }
-    // refrescar...
   };
 
-  // subir documento
   const subirDocumento = async (archivo, nombreDoc) => {
     const storageRef = ref(storage, `empleados/${empleadoDocumentos.id}/${archivo.name}`);
     await uploadBytes(storageRef, archivo);
@@ -253,20 +256,34 @@ const [modal, setModal] = useState(false);
     });
     setModalDocumentos(false);
     setEmpleadoDocumentos(null);
-    // refrescar documentos...
   };
 
-  // ... resto del CRUD de empleados, nómina, etc ...
+  function HorarioResumen({ horario }) {
+    if (!horario?.length) return <span className="text-xs text-gray-400">Sin horario</span>;
+    return (
+      <table className="text-xs border">
+        <tbody>
+          {horario.map((h, i) => (
+            <tr key={h.dia}>
+              <td>{h.dia.slice(0,3)}:</td>
+              <td>{h.entrada || "--:--"}</td>
+              <td>-</td>
+              <td>{h.salida || "--:--"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto py-8 animate-fade-in">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
         <h2 className="text-2xl font-bold text-blue-900">Empleados</h2>
-        <button className="btn-primary" /* ...nuevo empleado... */>
+        <button className="btn-primary" onClick={() => setModalNuevo(true)}>
           + Nuevo empleado
         </button>
       </div>
-      {/* TABLA DE EMPLEADOS */}
       <div className="bg-white rounded-xl shadow-lg p-6 mb-8 overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
@@ -275,20 +292,24 @@ const [modal, setModal] = useState(false);
               <th className="px-4 py-2">Cédula</th>
               <th className="px-4 py-2">Cargo</th>
               <th className="px-4 py-2">Salario</th>
-              <th className="px-4 py-2">Nacimiento</th> {/* NUEVO */}
+              <th className="px-4 py-2">Nacimiento</th>
+              <th className="px-4 py-2">Ingreso</th>
+              <th className="px-4 py-2">Horario</th>
               <th className="px-4 py-2">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {empleados.map((emp) => (
-              <tr key={emp.id}>
-                <td className="px-4 py-2">{emp.nombre}</td>
+              <tr key={emp.id} className={empleadoSel?.id === emp.id ? "bg-blue-50" : ""}>
+                <td className="px-4 py-2 cursor-pointer"
+                  onClick={() => setEmpleadoSel(empleadoSel?.id === emp.id ? null : emp)}>
+                  {emp.nombre}
+                </td>
                 <td className="px-4 py-2">{emp.cedula}</td>
                 <td className="px-4 py-2">{emp.cargo}</td>
                 <td className="px-4 py-2">{formatCurrency(emp.salario)}</td>
                 <td className="px-4 py-2 font-bold text-pink-700">
                   {emp.fechaNacimiento}
-                  {/* Puedes poner un 🎂 si hoy es su cumpleaños */}
                   {emp.fechaNacimiento &&
                     (() => {
                       const hoy = new Date();
@@ -298,28 +319,81 @@ const [modal, setModal] = useState(false);
                         : null;
                     })()}
                 </td>
+                <td className="px-4 py-2">{emp.fechaIngreso}</td>
+                <td className="px-4 py-2">
+                  <HorarioResumen horario={emp.horario} />
+                  <button className="btn-table mt-1" onClick={() => { setEmpleadoHorario(emp); setModalHorario(true); }}>Editar</button>
+                </td>
                 <td className="px-4 py-2 flex flex-col gap-1 md:flex-row">
-                  {/* ...editar, eliminar, pagar nomina... */}
-                  <button className="btn-table" onClick={() => { setEmpleadoHorario(emp); setModalHorario(true); }}>Horario</button>
                   <button className="btn-table" onClick={() => { setEmpleadoAusencia(emp); setModalAusencia(true); }}>Ausencia</button>
                   <button className="btn-table" onClick={() => { setEmpleadoVacacion(emp); setModalVacacion(true); }}>Vacaciones</button>
                   <button className="btn-table" onClick={() => { setEmpleadoPermiso(emp); setModalPermiso(true); }}>Permiso</button>
                   <button className="btn-table" onClick={() => { setEmpleadoDocumentos(emp); setModalDocumentos(true); }}>Documento</button>
+                  <button className="btn-table" onClick={() => setEmpleadoSel(empleadoSel?.id === emp.id ? null : emp)}>
+                    {empleadoSel?.id === emp.id ? "Ocultar detalles" : "Ver detalles"}
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {/* Aquí puedes mostrar: */}
-      {/* - Horario actual de cada empleado */}
-      {/* - Historial de ausencias con justificación */}
-      {/* - Lista de vacaciones y permisos */}
-      {/* - Documentos adjuntos */}
-      {/* - Resaltar cumpleaños del mes, etc. */}
-
-      {/* MODALES */}
+      {empleadoSel && (
+        <div className="mb-8 bg-blue-50 rounded-xl p-4">
+          <h3 className="font-bold mb-2 text-blue-900">Registros de {empleadoSel.nombre}</h3>
+          <p>
+            <span className="font-bold">Ingreso:</span>{" "}
+            {empleadoSel.fechaIngreso}
+            {" | "}
+            <span className="font-bold">Antigüedad:</span>{" "}
+            {empleadoSel.fechaIngreso ? (
+              (() => {
+                const hoy = new Date();
+                const ingreso = new Date(empleadoSel.fechaIngreso);
+                const ms = hoy - ingreso;
+                const dias = Math.floor(ms / (1000 * 60 * 60 * 24));
+                return `${dias} días`;
+              })()
+            ) : "N/A"}
+          </p>
+          <LiquidacionSimulador empleado={empleadoSel} />
+          <div className="grid md:grid-cols-2 gap-4 mt-4">
+            <TablaRegistros
+              tipo="ausencias"
+              registros={ausencias}
+              onEliminar={ids => eliminarRegistros(ids, "ausencias", setSelAus, () => setAusencias(ausencias => ausencias.filter(a => !ids.includes(a.id))))}
+              seleccionados={selAus}
+              setSeleccionados={setSelAus}
+            />
+            <TablaRegistros
+              tipo="vacaciones"
+              registros={vacaciones}
+              onEliminar={ids => eliminarRegistros(ids, "vacaciones", setSelVac, () => setVacaciones(vacaciones => vacaciones.filter(v => !ids.includes(v.id))))}
+              seleccionados={selVac}
+              setSeleccionados={setSelVac}
+            />
+            <TablaRegistros
+              tipo="permisos"
+              registros={permisos}
+              onEliminar={ids => eliminarRegistros(ids, "permisos", setSelPer, () => setPermisos(permisos => permisos.filter(p => !ids.includes(p.id))))}
+              seleccionados={selPer}
+              setSeleccionados={setSelPer}
+            />
+            <TablaRegistros
+              tipo="documentos"
+              registros={documentos}
+              onEliminar={ids => eliminarRegistros(ids, "documentos", setSelDoc, () => setDocumentos(documentos => documentos.filter(d => !ids.includes(d.id))))}
+              seleccionados={selDoc}
+              setSeleccionados={setSelDoc}
+            />
+          </div>
+        </div>
+      )}
+      <ModalNuevoEmpleado
+        visible={modalNuevo}
+        onClose={() => setModalNuevo(false)}
+        onCrear={crearEmpleado}
+      />
       <ModalHorario
         visible={modalHorario}
         onClose={() => setModalHorario(false)}
